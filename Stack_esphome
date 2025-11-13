@@ -1,0 +1,121 @@
+esphome:
+ name: ghome-gate
+ friendly_name: GHome Gate
+ 
+ esp8266:
+ board: nodemcuv2 # <- al posto di esp01_1m
+ 
+ logger:
+ 
+ api:
+ encryption:
+ key: "R7CjJ5BMuKeVbJLMgIBy8m8QAJ165hTU9ZhyCrdSiTg="
+ services:
+ - service: beeep # <-- nome del servizio esposto a HA
+ then:
+ - script.execute: beeep # <-- chiama il tuo script interno
+ ota:
+ - platform: esphome
+ password: "bd47f1a52df908008831f0431d931bd4"
+ 
+ wifi:
+ ssid: GHome
+ password: gianvito
+ ap:
+ ssid: "GSpot"
+ password: "gianvito" # ok, ma se vuoi metti qualcosa di più strong
+ 
+ captive_portal:
+ 
+ # LED di stato (sul NodeMCU è D4/GPIO2, attivo LOW)
+ status_led:
+ pin:
+ number: GPIO2
+ inverted: true
+ 
+ # =========================
+ # BUS I2C PER PN532
+ # =========================
+ i2c:
+ sda: GPIO4 # D2
+ scl: GPIO5 # D1
+ scan: true
+ frequency: 200kHz # 100–200kHz: più stabile con fili >10-15 cm
+ 
+ # Lettore NFC
+ pn532_i2c:
+ id: nfc_reader
+ on_tag:
+ then:
+ - homeassistant.tag_scanned: !lambda 'return x;'
+ 
+ 
+ # =========================
+ # STATO ESP
+ # =========================
+ binary_sensor:
+ - platform: status
+ name: "ESP GHome-Gate Status"
+ 
+ # =========================
+ # BUZZER PASSIVO su D6
+ # =========================
+ output:
+ - platform: esp8266_pwm
+ pin: GPIO12 # D6
+ id: buzzer_pwm
+ frequency: 2200 Hz # default
+ 
+ script:
+ # Beep 
+ - id: beeep #Singolo beep
+ mode: restart
+ then:
+ - lambda: |-
+ id(buzzer_pwm).set_frequency(2200);
+ id(buzzer_pwm).set_level(0.5f);
+ - delay: 200ms
+ - lambda: |-
+ id(buzzer_pwm).set_level(0.0f);
+ 
+ - id: doppio_beeep #Doppio beep
+ mode: restart
+ then:
+ - lambda: |-
+ id(buzzer_pwm).set_frequency(2200);
+ id(buzzer_pwm).set_level(0.5f);
+ - delay: 150ms
+ - lambda: |-
+ id(buzzer_pwm).set_level(0.0f);
+ - delay: 150ms
+ - lambda: |-
+ id(buzzer_pwm).set_level(0.5f);
+ - delay: 300ms
+ - lambda: |-
+ id(buzzer_pwm).set_level(0.0f);
+ 
+ switch:
+ - platform: template
+ name: "Beeep"
+ id: sw_beeep
+ turn_on_action:
+ - script.execute: beeep
+ - switch.turn_off: sw_beeep
+ 
+ - platform: template
+ name: "Doppio Beeep"
+ id: sw_doppio_beeep
+ turn_on_action:
+ - script.execute: doppio_beeep
+ - switch.turn_off: sw_doppio_beeep
+ 
+ button:
+ - platform: template
+ name: "Gate Beep"
+ on_press:
+ - script.execute: beeep
+ 
+ - platform: template
+ name: "Test Doppio Beep"
+ on_press:
+ - script.execute: doppio_beeep
